@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import Session
 from typing import List
 from decimal import Decimal
 from app.core.database import get_db
@@ -10,35 +8,21 @@ from app.models.operaciones import Cotizacion, CotizacionItem, OrdenTrabajo, OtI
 from app.schemas.operaciones import CotizacionCreate, CotizacionOut, OTOut
 
 router = APIRouter(prefix="/cotizaciones", tags=["Cotizaciones"])
-
 IVA = Decimal("0.19")
 
 
 @router.get("", response_model=List[CotizacionOut])
-async def listar_cotizaciones(
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    result = await db.execute(
-        select(Cotizacion)
-        .where(Cotizacion.taller_id == current_user.taller_id)
-        .options(selectinload(Cotizacion.items))
-        .order_by(Cotizacion.created_at.desc())
-    )
-    return result.scalars().all()
+def listar_cotizaciones(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return db.query(Cotizacion).filter(Cotizacion.taller_id == current_user.taller_id).order_by(Cotizacion.created_at.desc()).all()
 
 
 @router.post("", response_model=CotizacionOut, status_code=201)
-async def crear_cotizacion(
-    data: CotizacionCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
+def crear_cotizacion(data: CotizacionCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     neto = sum(Decimal(str(i.cantidad)) * Decimal(str(i.precio_unitario)) for i in data.items)
     iva = neto * IVA
     total = neto + iva
 
-    cotizacion = Cotizacion(
+    cot = Cotizacion(
         taller_id=current_user.taller_id,
         numero="",
         cliente_id=data.cliente_id,
@@ -49,41 +33,25 @@ async def crear_cotizacion(
         total_iva=iva,
         total_final=total,
     )
-    db.add(cotizacion)
-    await db.flush()
+    db.add(cot)
+    db.flush()
 
     for item_data in data.items:
-        item = CotizacionItem(cotizacion_id=cotizacion.id, **item_data.model_dump())
-        db.add(item)
+        db.add(CotizacionItem(cotizacion_id=cot.id, **item_data.model_dump()))
 
-    await db.commit()
-    result = await db.execute(
-        select(Cotizacion)
-        .where(Cotizacion.id == cotizacion.id)
-        .options(selectinload(Cotizacion.items))
-    )
-    return result.scalar_one()
+    db.commit()
+    db.refresh(cot)
+    return cot
 
 
 @router.post("/{cotizacion_id}/aprobar", response_model=OTOut)
-async def aprobar_y_convertir_a_ot(
-    cotizacion_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Aprueba la cotización y la convierte en Orden de Trabajo."""
-    result = await db.execute(
-        select(Cotizacion)
-        .where(Cotizacion.id == cotizacion_id, Cotizacion.taller_id == current_user.taller_id)
-        .options(selectinload(Cotizacion.items))
-    )
-    cot = result.scalar_one_or_none()
+def aprobar_cotizacion(cotizacion_id: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    cot = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id, Cotizacion.taller_id == current_user.taller_id).first()
     if not cot:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
     if cot.estado != "enviada":
         raise HTTPException(status_code=400, detail="Solo se pueden aprobar cotizaciones enviadas")
 
-    # Crear OT desde cotización
     ot = OrdenTrabajo(
         taller_id=current_user.taller_id,
         numero_ot="",
@@ -94,44 +62,23 @@ async def aprobar_y_convertir_a_ot(
         total_final=cot.total_final,
     )
     db.add(ot)
-    await db.flush()
+    db.flush()
 
     for ci in cot.items:
-        db.add(OtItem(
-            ot_id=ot.id,
-            tipo=ci.tipo,
-            producto_id=ci.producto_id,
-            descripcion=ci.descripcion,
-            cantidad=ci.cantidad,
-            precio_unitario=ci.precio_unitario,
-        ))
+        db.add(OtItem(ot_id=ot.id, tipo=ci.tipo, producto_id=ci.producto_id, descripcion=ci.descripcion, cantidad=ci.cantidad, precio_unitario=ci.precio_unitario))
 
     cot.estado = "aprobada"
     cot.ot_id = ot.id
-    await db.commit()
-
-    result = await db.execute(
-        select(OrdenTrabajo)
-        .where(OrdenTrabajo.id == ot.id)
-        .options(selectinload(OrdenTrabajo.items))
-    )
-    return result.scalar_one()
+    db.commit()
+    db.refresh(ot)
+    return ot
 
 
 @router.patch("/{cotizacion_id}/estado")
-async def cambiar_estado_cotizacion(
-    cotizacion_id: str,
-    estado: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    result = await db.execute(
-        select(Cotizacion)
-        .where(Cotizacion.id == cotizacion_id, Cotizacion.taller_id == current_user.taller_id)
-    )
-    cot = result.scalar_one_or_none()
+def cambiar_estado(cotizacion_id: str, estado: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    cot = db.query(Cotizacion).filter(Cotizacion.id == cotizacion_id, Cotizacion.taller_id == current_user.taller_id).first()
     if not cot:
         raise HTTPException(status_code=404, detail="Cotización no encontrada")
     cot.estado = estado
-    await db.commit()
+    db.commit()
     return {"ok": True, "estado": estado}
