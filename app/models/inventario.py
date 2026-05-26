@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, Integer, Numeric, SmallInteger, ARRAY
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, Integer, Numeric, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -25,8 +25,9 @@ class Cliente(Base):
 
     taller: Mapped["Taller"] = relationship(back_populates="clientes")  # type: ignore
     vehiculos: Mapped[list["Vehiculo"]] = relationship(back_populates="cliente", cascade="all, delete")
-    cotizaciones: Mapped[list["Cotizacion"]] = relationship(back_populates="cliente")
-    ordenes: Mapped[list["OrdenTrabajo"]] = relationship(back_populates="cliente")
+    cotizaciones: Mapped[list["Cotizacion"]] = relationship(back_populates="cliente")  # type: ignore
+    ordenes: Mapped[list["OrdenTrabajo"]] = relationship(back_populates="cliente")  # type: ignore
+    citas: Mapped[list["Cita"]] = relationship(back_populates="cliente")  # type: ignore
 
 
 class Vehiculo(Base):
@@ -47,8 +48,8 @@ class Vehiculo(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     cliente: Mapped["Cliente"] = relationship(back_populates="vehiculos")
-    ordenes: Mapped[list["OrdenTrabajo"]] = relationship(back_populates="vehiculo")
-    citas: Mapped[list["Cita"]] = relationship(back_populates="vehiculo")
+    ordenes: Mapped[list["OrdenTrabajo"]] = relationship(back_populates="vehiculo")  # type: ignore
+    citas: Mapped[list["Cita"]] = relationship(back_populates="vehiculo")  # type: ignore
 
 
 class Proveedor(Base):

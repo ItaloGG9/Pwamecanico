@@ -24,10 +24,9 @@ class Taller(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
-    # Relaciones
     usuarios: Mapped[list["Usuario"]] = relationship(back_populates="taller", cascade="all, delete")
-    clientes: Mapped[list["Cliente"]] = relationship(back_populates="taller", cascade="all, delete")
-    productos: Mapped[list["Producto"]] = relationship(back_populates="taller", cascade="all, delete")
+    clientes: Mapped[list["Cliente"]] = relationship(back_populates="taller", cascade="all, delete")  # type: ignore
+    productos: Mapped[list["Producto"]] = relationship(back_populates="taller", cascade="all, delete")  # type: ignore
 
 
 class Usuario(Base):
@@ -43,5 +42,4 @@ class Usuario(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
-    # Relaciones
     taller: Mapped["Taller"] = relationship(back_populates="usuarios")
