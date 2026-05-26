@@ -19,7 +19,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.flush()
 
     usuario = Usuario(
-        taller_id=taller.id,
+        taller_id=str(taller.id),
         nombre=data.usuario.nombre,
         email=data.usuario.email,
         password_hash=hash_password(data.usuario.password),
@@ -29,7 +29,11 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(usuario)
 
-    token = create_access_token({"sub": usuario.id, "taller_id": taller.id, "rol": usuario.rol})
+    token = create_access_token({
+        "sub": str(usuario.id),
+        "taller_id": str(usuario.taller_id),
+        "rol": str(usuario.rol)
+    })
     return TokenResponse(access_token=token, usuario=UsuarioOut.model_validate(usuario))
 
 
@@ -46,9 +50,9 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Usuario desactivado")
 
     token = create_access_token({
-        "sub": usuario.id,
-        "taller_id": usuario.taller_id,
-        "rol": usuario.rol,
+        "sub": str(usuario.id),
+        "taller_id": str(usuario.taller_id),
+        "rol": str(usuario.rol),
     })
     return TokenResponse(access_token=token, usuario=UsuarioOut.model_validate(usuario))
 
