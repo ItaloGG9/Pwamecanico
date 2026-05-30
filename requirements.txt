@@ -1,7 +1,8 @@
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
 sqlalchemy==2.0.30
-psycopg2-binary==2.9.9
+asyncpg==0.29.0
+greenlet==3.0.3
 pydantic==2.7.1
 pydantic-settings==2.2.1
 python-jose[cryptography]==3.3.0
@@ -11,3 +12,5 @@ python-multipart==0.0.9
 httpx==0.27.0
 jinja2==3.1.4
 python-dotenv==1.0.1
+redis[asyncio]==4.6.0
+fastapi-cache2[redis]==0.2.1

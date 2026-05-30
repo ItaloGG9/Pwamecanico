@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import verify_password, hash_password, create_access_token, get_current_user
 from app.models.usuario import Taller, Usuario
@@ -9,14 +10,14 @@ router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(Usuario).filter(Usuario.email == data.usuario.email).first()
-    if existing:
+async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Usuario).where(Usuario.email == data.usuario.email))
+    if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
 
     taller = Taller(**data.taller.model_dump())
     db.add(taller)
-    db.flush()
+    await db.flush()
 
     usuario = Usuario(
         taller_id=str(taller.id),
@@ -26,20 +27,21 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         rol="admin",
     )
     db.add(usuario)
-    db.commit()
-    db.refresh(usuario)
+    await db.commit()
+    await db.refresh(usuario)
 
     token = create_access_token({
         "sub": str(usuario.id),
         "taller_id": str(usuario.taller_id),
-        "rol": str(usuario.rol)
+        "rol": str(usuario.rol),
     })
     return TokenResponse(access_token=token, usuario=UsuarioOut.model_validate(usuario))
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    usuario = db.query(Usuario).filter(Usuario.email == data.email).first()
+async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Usuario).where(Usuario.email == data.email))
+    usuario = result.scalar_one_or_none()
 
     if not usuario or not verify_password(data.password, usuario.password_hash):
         raise HTTPException(
@@ -58,5 +60,5 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me", response_model=UsuarioOut)
-def me(current_user=Depends(get_current_user)):
+async def me(current_user=Depends(get_current_user)):
     return current_user

@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
 
+    # Redis (Railway Redis plugin o Upstash)
+    REDIS_URL: str = "redis://localhost:6379"
+
     @property
     def origins(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]

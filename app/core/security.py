@@ -2,10 +2,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import get_db
@@ -31,9 +30,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def get_current_user(
+async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     from app.models.usuario import Usuario
 
@@ -50,13 +49,14 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+    result = await db.execute(select(Usuario).where(Usuario.id == user_id))
+    usuario = result.scalar_one_or_none()
     if usuario is None or not usuario.activo:
         raise credentials_exception
     return usuario
 
 
-def get_current_admin(current_user=Depends(get_current_user)):
+async def get_current_admin(current_user=Depends(get_current_user)):
     if current_user.rol != "admin":
         raise HTTPException(status_code=403, detail="Se requiere rol administrador")
     return current_user

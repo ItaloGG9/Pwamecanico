@@ -1,7 +1,16 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.cache import init_cache
 from app.api.v1 import api_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_cache()
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -9,9 +18,9 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
+    lifespan=lifespan,
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
@@ -20,7 +29,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
 app.include_router(api_router)
 
 
